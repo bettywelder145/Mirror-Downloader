@@ -7,26 +7,48 @@ Slow Download ? This repo will get your download link, download it and will give
 - 🔗 Get a new mirror link for your downloaded files
 - 💻 Works great on GitHub Codespaces
 
-## Installation
+## Deploy with GitHub Codespaces
+
+### Step 1: Create a Codespace
+1. Go to this repository on GitHub
+2. Click the green **Code** button
+3. Select the **Codespaces** tab
+4. Click **Create codespace on main**
+
+### Step 2: Install and Run
+Once your Codespace is ready, run these commands in the terminal:
 
 ```bash
 npm install
+npm start
 ```
 
-## Usage
+### Step 3: Open the Web Interface
+1. When the server starts, you'll see: `Mirror Downloader running at http://localhost:3000`
+2. A popup will appear asking to open in browser - click **Open in Browser**
+3. Or go to the **Ports** tab at the bottom, find port 3000, and click the globe icon 🌐
+
+### Step 4: Make Port Public (for sharing download links)
+1. Go to the **Ports** tab at the bottom of VS Code
+2. Right-click on port 3000
+3. Select **Port Visibility** → **Public**
+4. Now your download links can be accessed by anyone with the URL
+
+### Step 5: Use the Downloader
+1. Paste your download URL in the input field
+2. Click **Download**
+3. Watch the real-time progress
+4. Once complete, click the download link to get your file
+5. Share the Codespace URL with others for faster downloads!
+
+## Local Installation
 
 ```bash
+npm install
 npm start
 ```
 
 The server will start on port 3000 (or the PORT environment variable).
-
-### On GitHub Codespaces
-1. Run `npm start`
-2. Open the forwarded port (3000) in your browser
-3. Paste your download URL
-4. Wait for the download to complete
-5. Click the download link to get your file from the Codespace
 
 ## How It Works
 1. Paste a direct download URL in the web interface
