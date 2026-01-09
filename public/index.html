@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mirror Downloader</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+            font-size: 2.5rem;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: rgba(255,255,255,0.9);
+            margin-bottom: 40px;
+            font-size: 1.1rem;
+        }
+        
+        .download-form {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            margin-bottom: 30px;
+        }
+        
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .url-input {
+            flex: 1;
+            padding: 15px 20px;
+            font-size: 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+        
+        .url-input:focus {
+            border-color: #667eea;
+        }
+        
+        .download-btn {
+            padding: 15px 30px;
+            font-size: 16px;
+            font-weight: 600;
+            color: white;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .download-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        .download-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .downloads-list {
+            background: white;
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+        
+        .downloads-list h2 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 1.3rem;
+        }
+        
+        .download-item {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 15px;
+        }
+        
+        .download-item:last-child {
+            margin-bottom: 0;
+        }
+        
+        .download-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .filename {
+            font-weight: 600;
+            color: #333;
+            word-break: break-all;
+        }
+        
+        .status {
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        .status.downloading {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .status.completed {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .progress-container {
+            margin: 15px 0;
+        }
+        
+        .progress-bar {
+            height: 8px;
+            background: #e0e0e0;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 10px;
+            transition: width 0.3s ease;
+        }
+        
+        .progress-fill.indeterminate {
+            width: 30% !important;
+            animation: indeterminate 1.5s infinite ease-in-out;
+        }
+        
+        @keyframes indeterminate {
+            0% { margin-left: 0; }
+            50% { margin-left: 70%; }
+            100% { margin-left: 0; }
+        }
+        
+        .progress-info {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 8px;
+            font-size: 14px;
+            color: #666;
+        }
+        
+        .download-link {
+            display: inline-block;
+            margin-top: 10px;
+            padding: 10px 20px;
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: transform 0.2s;
+        }
+        
+        .download-link:hover {
+            transform: translateY(-2px);
+        }
+        
+        .error-message {
+            color: #dc3545;
+            margin-top: 10px;
+        }
+        
+        .no-downloads {
+            text-align: center;
+            color: #999;
+            padding: 40px;
+        }
+        
+        @media (max-width: 600px) {
+            .input-group {
+                flex-direction: column;
+            }
+            
+            .download-btn {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Mirror Downloader</h1>
+        <p class="subtitle">Paste a download URL and get a new mirror link for faster downloads</p>
+        
+        <div class="download-form">
+            <div class="input-group">
+                <input type="text" id="urlInput" class="url-input" placeholder="Paste your download URL here..." autocomplete="off">
+                <button id="downloadBtn" class="download-btn">Download</button>
+            </div>
+        </div>
+        
+        <div class="downloads-list">
+            <h2>📥 Downloads</h2>
+            <div id="downloadsList">
+                <div class="no-downloads">No downloads yet. Paste a URL above to get started!</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        const urlInput = document.getElementById('urlInput');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const downloadsList = document.getElementById('downloadsList');
+        
+        let downloads = {};
+        
+        downloadBtn.addEventListener('click', startDownload);
+        urlInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') startDownload();
+        });
+        
+        function startDownload() {
+            const url = urlInput.value.trim();
+            if (!url) {
+                alert('Please enter a download URL');
+                return;
+            }
+            
+            // Basic URL validation
+            try {
+                new URL(url);
+            } catch (e) {
+                alert('Please enter a valid URL');
+                return;
+            }
+            
+            downloadBtn.disabled = true;
+            socket.emit('start-download', { url });
+            urlInput.value = '';
+            
+            setTimeout(() => {
+                downloadBtn.disabled = false;
+            }, 1000);
+        }
+        
+        socket.on('download-started', (data) => {
+            downloads[data.downloadId] = {
+                ...data,
+                progress: 0,
+                status: 'downloading'
+            };
+            renderDownloads();
+        });
+        
+        socket.on('download-progress', (data) => {
+            if (downloads[data.downloadId]) {
+                downloads[data.downloadId] = {
+                    ...downloads[data.downloadId],
+                    ...data,
+                    status: 'downloading'
+                };
+                renderDownloads();
+            }
+        });
+        
+        socket.on('download-complete', (data) => {
+            if (downloads[data.downloadId]) {
+                downloads[data.downloadId] = {
+                    ...downloads[data.downloadId],
+                    ...data,
+                    progress: 100,
+                    status: 'completed'
+                };
+                renderDownloads();
+            }
+        });
+        
+        socket.on('download-error', (data) => {
+            if (downloads[data.downloadId]) {
+                downloads[data.downloadId] = {
+                    ...downloads[data.downloadId],
+                    status: 'error',
+                    error: data.error
+                };
+            } else {
+                // Show error for failed downloads
+                const errorId = 'error-' + Date.now();
+                downloads[errorId] = {
+                    downloadId: errorId,
+                    filename: 'Download failed',
+                    status: 'error',
+                    error: data.error
+                };
+            }
+            renderDownloads();
+        });
+        
+        function formatBytes(bytes) {
+            if (!bytes || bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+        
+        function renderDownloads() {
+            const downloadIds = Object.keys(downloads);
+            
+            if (downloadIds.length === 0) {
+                downloadsList.innerHTML = '<div class="no-downloads">No downloads yet. Paste a URL above to get started!</div>';
+                return;
+            }
+            
+            downloadsList.innerHTML = downloadIds.reverse().map(id => {
+                const d = downloads[id];
+                const progressPercent = d.progress >= 0 ? d.progress : 0;
+                const progressText = d.progress >= 0 ? `${d.progress}%` : 'Unknown size';
+                const isIndeterminate = d.progress < 0;
+                
+                let content = `
+                    <div class="download-item">
+                        <div class="download-header">
+                            <span class="filename">${escapeHtml(d.filename || 'Downloading...')}</span>
+                            <span class="status ${d.status}">${d.status}</span>
+                        </div>
+                `;
+                
+                if (d.status === 'downloading') {
+                    content += `
+                        <div class="progress-container">
+                            <div class="progress-bar">
+                                <div class="progress-fill${isIndeterminate ? ' indeterminate' : ''}" style="width: ${isIndeterminate ? '30' : progressPercent}%"></div>
+                            </div>
+                            <div class="progress-info">
+                                <span>${formatBytes(d.downloadedBytes)}${d.fileSize ? ' / ' + formatBytes(d.fileSize) : ''}</span>
+                                <span>${d.speed || ''}${d.speed && progressText ? ' - ' : ''}${progressText}</span>
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                if (d.status === 'completed' && d.downloadUrl) {
+                    content += `
+                        <a href="${d.downloadUrl}" class="download-link" download>📥 Download File (${formatBytes(d.fileSize)})</a>
+                    `;
+                }
+                
+                if (d.status === 'error') {
+                    content += `
+                        <div class="error-message">Error: ${escapeHtml(d.error || 'Unknown error')}</div>
+                    `;
+                }
+                
+                content += '</div>';
+                return content;
+            }).join('');
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>
