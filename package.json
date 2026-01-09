@@ -1,0 +1,15 @@
+{
+  "name": "mirror-downloader",
+  "version": "1.0.0",
+  "description": "Download files and provide new mirror links with real-time progress",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "socket.io": "^4.7.2",
+    "axios": "^1.12.0",
+    "uuid": "^9.0.0"
+  }
+}
