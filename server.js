@@ -5,8 +5,147 @@ const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
+const { google } = require('googleapis');
 
 const app = express();
+
+// Google Drive Configuration
+const GOOGLE_DRIVE_FOLDER_NAME = 'mirror_downloads';
+let driveClient = null;
+let driveFolderId = null;
+
+// Initialize Google Drive client
+async function initGoogleDrive() {
+    try {
+        // Load service account credentials from file
+        const credentialsPath = path.join(__dirname, 'credentials.json');
+        
+        if (!fs.existsSync(credentialsPath)) {
+            console.error('❌ credentials.json not found! Please add your Google Service Account credentials.');
+            console.log('📝 Instructions:');
+            console.log('   1. Go to Google Cloud Console → APIs & Services → Credentials');
+            console.log('   2. Create a Service Account and download the JSON key');
+            console.log('   3. Save it as "credentials.json" in the project root');
+            console.log('   4. Enable Google Drive API in your project');
+            console.log('   5. Share the "mirror_downloads" folder with the service account email');
+            return false;
+        }
+        
+        const credentials = JSON.parse(fs.readFileSync(credentialsPath, 'utf8'));
+        
+        const auth = new google.auth.GoogleAuth({
+            credentials: credentials,
+            scopes: ['https://www.googleapis.com/auth/drive.file']
+        });
+        
+        driveClient = google.drive({ version: 'v3', auth });
+        
+        // Find or create the mirror_downloads folder
+        driveFolderId = await getOrCreateFolder(GOOGLE_DRIVE_FOLDER_NAME);
+        
+        console.log(`✅ Google Drive connected! Folder ID: ${driveFolderId}`);
+        return true;
+    } catch (error) {
+        console.error('❌ Failed to initialize Google Drive:', error.message);
+        return false;
+    }
+}
+
+// Get or create the mirror_downloads folder
+async function getOrCreateFolder(folderName) {
+    try {
+        // Search for existing folder
+        const response = await driveClient.files.list({
+            q: `name='${folderName}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+            fields: 'files(id, name)',
+            spaces: 'drive'
+        });
+        
+        if (response.data.files.length > 0) {
+            return response.data.files[0].id;
+        }
+        
+        // Create new folder
+        const folderMetadata = {
+            name: folderName,
+            mimeType: 'application/vnd.google-apps.folder'
+        };
+        
+        const folder = await driveClient.files.create({
+            resource: folderMetadata,
+            fields: 'id'
+        });
+        
+        // Make folder publicly accessible
+        await driveClient.permissions.create({
+            fileId: folder.data.id,
+            requestBody: {
+                role: 'reader',
+                type: 'anyone'
+            }
+        });
+        
+        console.log(`📁 Created new folder: ${folderName}`);
+        return folder.data.id;
+    } catch (error) {
+        console.error('Error creating folder:', error.message);
+        throw error;
+    }
+}
+
+// Upload file to Google Drive
+async function uploadToGoogleDrive(filePath, filename) {
+    if (!driveClient || !driveFolderId) {
+        throw new Error('Google Drive not initialized');
+    }
+    
+    const fileMetadata = {
+        name: filename,
+        parents: [driveFolderId]
+    };
+    
+    const media = {
+        mimeType: 'application/octet-stream',
+        body: fs.createReadStream(filePath)
+    };
+    
+    // Upload file
+    const file = await driveClient.files.create({
+        resource: fileMetadata,
+        media: media,
+        fields: 'id, name, size, webContentLink'
+    });
+    
+    // Make file publicly accessible
+    await driveClient.permissions.create({
+        fileId: file.data.id,
+        requestBody: {
+            role: 'reader',
+            type: 'anyone'
+        }
+    });
+    
+    // Get the direct download link
+    const directLink = `https://drive.google.com/uc?export=download&id=${file.data.id}`;
+    
+    return {
+        fileId: file.data.id,
+        fileName: file.data.name,
+        directLink: directLink,
+        webLink: `https://drive.google.com/file/d/${file.data.id}/view`
+    };
+}
+
+// Delete local file after upload
+function deleteLocalFile(filePath) {
+    fs.unlink(filePath, (err) => {
+        if (err && err.code !== 'ENOENT') {
+            console.error('Failed to delete local file:', err);
+        } else {
+            console.log('🗑️ Local file deleted after upload');
+        }
+    });
+}
 const server = http.createServer(app);
 
 // Optimize server for maximum throughput
@@ -230,23 +369,88 @@ io.on('connection', (socket) => {
             
             response.data.pipe(writer);
             
-            writer.on('finish', () => {
+            writer.on('finish', async () => {
                 const finalSize = fs.statSync(filePath).size;
-                const downloadUrl = `/downloads/${uniqueFilename}`;
                 
-                activeDownloads.set(downloadId, {
-                    ...activeDownloads.get(downloadId),
-                    downloadedBytes: finalSize,
-                    status: 'completed',
-                    downloadUrl
-                });
-                
-                socket.emit('download-complete', {
-                    downloadId,
-                    filename,
-                    fileSize: finalSize,
-                    downloadUrl
-                });
+                // Upload to Google Drive
+                if (driveClient && driveFolderId) {
+                    socket.emit('download-progress', {
+                        downloadId,
+                        downloadedBytes: finalSize,
+                        fileSize: finalSize,
+                        progress: 100,
+                        speed: 'Uploading to Google Drive...'
+                    });
+                    
+                    try {
+                        console.log(`📤 Uploading to Google Drive: ${filename}`);
+                        const driveResult = await uploadToGoogleDrive(filePath, filename);
+                        
+                        activeDownloads.set(downloadId, {
+                            ...activeDownloads.get(downloadId),
+                            downloadedBytes: finalSize,
+                            status: 'completed',
+                            downloadUrl: driveResult.directLink,
+                            driveFileId: driveResult.fileId
+                        });
+                        
+                        socket.emit('download-complete', {
+                            downloadId,
+                            filename,
+                            fileSize: finalSize,
+                            downloadUrl: driveResult.directLink,
+                            driveLink: driveResult.webLink,
+                            source: 'google_drive'
+                        });
+                        
+                        console.log(`✅ Uploaded to Google Drive: ${filename}`);
+                        console.log(`📎 Direct link: ${driveResult.directLink}`);
+                        
+                        // Delete local file after successful upload
+                        deleteLocalFile(filePath);
+                        
+                    } catch (uploadError) {
+                        console.error('❌ Google Drive upload failed:', uploadError.message);
+                        
+                        // Fallback to local download link
+                        const localDownloadUrl = `/downloads/${uniqueFilename}`;
+                        
+                        activeDownloads.set(downloadId, {
+                            ...activeDownloads.get(downloadId),
+                            downloadedBytes: finalSize,
+                            status: 'completed',
+                            downloadUrl: localDownloadUrl
+                        });
+                        
+                        socket.emit('download-complete', {
+                            downloadId,
+                            filename,
+                            fileSize: finalSize,
+                            downloadUrl: localDownloadUrl,
+                            source: 'local',
+                            warning: 'Google Drive upload failed, using local link'
+                        });
+                    }
+                } else {
+                    // No Google Drive configured, use local link
+                    const downloadUrl = `/downloads/${uniqueFilename}`;
+                    
+                    activeDownloads.set(downloadId, {
+                        ...activeDownloads.get(downloadId),
+                        downloadedBytes: finalSize,
+                        status: 'completed',
+                        downloadUrl
+                    });
+                    
+                    socket.emit('download-complete', {
+                        downloadId,
+                        filename,
+                        fileSize: finalSize,
+                        downloadUrl,
+                        source: 'local',
+                        warning: 'Google Drive not configured'
+                    });
+                }
                 
                 console.log(`Download complete: ${filename}`);
             });
@@ -312,6 +516,14 @@ app.get('/api/downloads', (req, res) => {
     res.json(downloads);
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, async () => {
     console.log(`Mirror Downloader running at http://localhost:${PORT}`);
+    
+    // Initialize Google Drive
+    const driveInitialized = await initGoogleDrive();
+    if (driveInitialized) {
+        console.log('🚀 Files will be uploaded to Google Drive after download');
+    } else {
+        console.log('⚠️ Google Drive not configured - files will be served locally');
+    }
 });
